@@ -23,6 +23,8 @@ public enum ReverseGeoCodingType {
 public typealias LocationCompletionHandler = (latitude:Double, longitude:Double, status:LocationUpdateStatus, error:NSError?) -> Void
 public typealias ReverseGeocodeCompletionHandler = (country :String?, state :String?, city :String?, reverseGecodeInfo:AnyObject?, placemark:CLPlacemark?, error:NSError?) -> Void
 
+public typealias LocationCollected = (location :CLLocation, error :NSError?) -> Void
+
 public class LocationManager: NSObject, CLLocationManagerDelegate {
     
     enum GoogleAPIStatus :String {
@@ -33,7 +35,7 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
         case InvalidRequest = "INVALID_REQUEST"
     }
     
-    private var locationCompletionHandler:LocationCompletionHandler?
+    private var locationCompletionHandlers :[LocationCompletionHandler?] = []
     private var reverseGeocodingCompletionHandler:ReverseGeocodeCompletionHandler?
     
     private var locationManager: CLLocationManager!
@@ -125,7 +127,7 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
     
     public func updateLocation(completionHandler :LocationCompletionHandler) {
         
-        self.locationCompletionHandler = completionHandler
+        self.locationCompletionHandlers.append(completionHandler)
         self.handleLocationStatus(CLLocationManager.authorizationStatus())
     }
     
@@ -284,43 +286,48 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
         let currentLocation = CLLocation(latitude: self.latitude, longitude: self.longitude)
         let lastUpdate = NSUserDefaults.standardUserDefaults().objectForKey(kLastLocationUpdate) as? NSDate
         
-        guard let completionHandler = locationCompletionHandler else {
+        guard locationCompletionHandlers.count > 0 else {
             return
         }
         
-        let longitude = location?.coordinate.longitude, latitude = location?.coordinate.latitude
-        
-        // Check for distance since last measurement
-        guard currentLocation.distanceFromLocation(location!) > updateDistanceThreshold else {
-            return completionHandler(latitude: latitude!, longitude: longitude!, status: .DISTANCE, error: nil)
+        while let completionHandler = locationCompletionHandlers.removeFirst() {
+            
+            let longitude = location?.coordinate.longitude, latitude = location?.coordinate.latitude
+            
+            // Check for distance since last measurement
+            guard currentLocation.distanceFromLocation(location!) > updateDistanceThreshold else {
+                return completionHandler(latitude: latitude!, longitude: longitude!, status: .DISTANCE, error: nil)
+            }
+            
+            // Check for time since last measurement
+            guard lastUpdate == nil || fabs((lastUpdate?.timeIntervalSinceNow)!) > updateTimeintervalThreshold else {
+                return completionHandler(latitude: latitude!, longitude: longitude!, status: .TIME, error: nil)
+            }
+            
+            NSNotificationCenter.defaultCenter().postNotificationName(kLocationUpdated, object: nil)
+            
+            self.longitude = longitude!
+            self.latitude = latitude!
+            
+            NSUserDefaults.standardUserDefaults().setObject(NSDate(), forKey: kLastLocationUpdate)
+            NSUserDefaults.standardUserDefaults().setDouble(self.latitude, forKey: kLastLocationLatitude)
+            NSUserDefaults.standardUserDefaults().setDouble(self.longitude, forKey: kLastLocationLongitude)
+            
+            completionHandler(latitude: self.latitude, longitude: self.longitude, status: .OK, error: nil)
         }
-        
-        // Check for time since last measurement
-        guard lastUpdate == nil || fabs((lastUpdate?.timeIntervalSinceNow)!) > updateTimeintervalThreshold else {
-            return completionHandler(latitude: latitude!, longitude: longitude!, status: .TIME, error: nil)
-        }
-        
-        NSNotificationCenter.defaultCenter().postNotificationName(kLocationUpdated, object: nil)
-        
-        self.longitude = longitude!
-        self.latitude = latitude!
-        
-        NSUserDefaults.standardUserDefaults().setObject(NSDate(), forKey: kLastLocationUpdate)
-        NSUserDefaults.standardUserDefaults().setDouble(self.latitude, forKey: kLastLocationLatitude)
-        NSUserDefaults.standardUserDefaults().setDouble(self.longitude, forKey: kLastLocationLongitude)
-        
-        completionHandler(latitude: self.latitude, longitude: self.longitude, status: .OK, error: nil)
     }
  
     public func locationManager(manager: CLLocationManager, didFailWithError error: NSError) {
         
-        guard let completionHandler = locationCompletionHandler else {
+        manager.stopUpdatingLocation()
+        
+        guard locationCompletionHandlers.count > 0 else {
             return
         }
         
-        manager.stopUpdatingLocation()
-        
-        completionHandler(latitude: latitude, longitude: longitude, status: .ERROR, error: error)
+        while let completionHandler = locationCompletionHandlers.removeFirst() {
+            completionHandler(latitude: latitude, longitude: longitude, status: .ERROR, error: error)
+        }
     }
     
     public func locationManager(manager: CLLocationManager, didChangeAuthorizationStatus status: CLAuthorizationStatus) {
