@@ -20,6 +20,7 @@ public enum ReverseGeoCodingType {
     case APPLE
 }
 
+public typealias DidEnterRegion = (region :CLRegion?, error :NSError?) -> Void
 public typealias LocationCompletionHandler = (latitude:Double, longitude:Double, status:LocationUpdateStatus, error:NSError?) -> Void
 public typealias ReverseGeocodeCompletionHandler = (country :String?, state :String?, city :String?, reverseGecodeInfo:AnyObject?, placemark:CLPlacemark?, error:NSError?) -> Void
 
@@ -35,6 +36,7 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
         case InvalidRequest = "INVALID_REQUEST"
     }
     
+    private var didEnterRegionCompletionHandlers :[String:DidEnterRegion] = [:]
     private var locationCompletionHandlers :[LocationCompletionHandler?] = []
     private var reverseGeocodingCompletionHandler:ReverseGeocodeCompletionHandler?
     
@@ -121,6 +123,68 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
         self.updateDistanceThreshold = updateDistanceThreshold
         self.updateTimeintervalThreshold = updateTimeintervalThreshold
         self.initWithLastKnownLocation = initWithLastKnownLocation
+    }
+    
+    // MARK: Region monitoring
+    
+    public func monitorRegion(latitude :CLLocationDegrees, longitude :CLLocationDegrees, radius :CLLocationDistance = 100.0, completion :DidEnterRegion) {
+        
+        guard CLLocationManager.authorizationStatus() == .AuthorizedAlways else {
+            return
+        }
+        
+        guard radius < self.locationManager.maximumRegionMonitoringDistance else {
+            return
+        }
+        
+        let location = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        let identifier = "\(longitude)\(latitude)\(radius)"
+        
+        let region = CLCircularRegion(center: location, radius: radius, identifier: identifier)
+        region.notifyOnExit = true
+        region.notifyOnEntry = false
+        
+        self.locationManager.startMonitoringForRegion(region)
+        
+        self.didEnterRegionCompletionHandlers[identifier] = completion
+    }
+    
+    public func locationManager(manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        
+    }
+    
+    public func locationManager(manager: CLLocationManager, didStartMonitoringForRegion region: CLRegion) {
+        
+    }
+    
+    public func locationManager(manager: CLLocationManager, didExitRegion region: CLRegion) {
+        
+        self.locationManager.stopMonitoringForRegion(region)
+        
+        guard let completion = self.didEnterRegionCompletionHandlers[region.identifier] else {
+            return
+        }
+        
+        completion(region: region, error: nil)
+        
+        self.didEnterRegionCompletionHandlers[region.identifier] = nil
+    }
+    
+    public func locationManager(manager: CLLocationManager, monitoringDidFailForRegion region: CLRegion?, withError error: NSError) {
+        
+        guard let region = region else {
+            return
+        }
+        
+        self.locationManager.stopMonitoringForRegion(region)
+        
+        guard let completion = self.didEnterRegionCompletionHandlers[region.identifier] else {
+            return
+        }
+        
+        completion(region: nil, error: NSError(domain: "", code: 503, userInfo: nil))
+        
+        self.didEnterRegionCompletionHandlers[region.identifier] = nil
     }
     
     // MARK: - 
