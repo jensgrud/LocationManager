@@ -24,7 +24,7 @@ public typealias DidEnterRegion = (region :CLRegion?, error :NSError?) -> Void
 public typealias LocationCompletionHandler = (latitude:Double, longitude:Double, status:LocationUpdateStatus, error:NSError?) -> Void
 public typealias ReverseGeocodeCompletionHandler = (country :String?, state :String?, city :String?, reverseGecodeInfo:AnyObject?, placemark:CLPlacemark?, error:NSError?) -> Void
 
-public typealias LocationCollected = (location :CLLocation, error :NSError?) -> Void
+public typealias LocationAuthorizationChanged = (manager :CLLocationManager, status :CLAuthorizationStatus) -> Void
 
 public class LocationManager: NSObject, CLLocationManagerDelegate {
     
@@ -39,6 +39,7 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
     private var didEnterRegionCompletionHandlers :[String:DidEnterRegion] = [:]
     private var locationCompletionHandlers :[LocationCompletionHandler?] = []
     private var reverseGeocodingCompletionHandler:ReverseGeocodeCompletionHandler?
+    private var authorizationChangedCompletionHandler:LocationAuthorizationChanged?
     
     private var locationManager: CLLocationManager!
     
@@ -354,9 +355,16 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
             return
         }
         
-        while let completionHandler = locationCompletionHandlers.removeFirst() {
+        while locationCompletionHandlers.count > 0 {
+            
+            guard let completionHandler = locationCompletionHandlers.removeFirst() else {
+                return
+            }
             
             let longitude = location?.coordinate.longitude, latitude = location?.coordinate.latitude
+            
+            self.longitude = longitude!
+            self.latitude = latitude!
             
             // Check for distance since last measurement
             guard currentLocation.distanceFromLocation(location!) > updateDistanceThreshold else {
@@ -370,9 +378,6 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
             
             NSNotificationCenter.defaultCenter().postNotificationName(kLocationUpdated, object: nil)
             
-            self.longitude = longitude!
-            self.latitude = latitude!
-            
             NSUserDefaults.standardUserDefaults().setObject(NSDate(), forKey: kLastLocationUpdate)
             NSUserDefaults.standardUserDefaults().setDouble(self.latitude, forKey: kLastLocationLatitude)
             NSUserDefaults.standardUserDefaults().setDouble(self.longitude, forKey: kLastLocationLongitude)
@@ -385,11 +390,12 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
         
         manager.stopUpdatingLocation()
         
-        guard locationCompletionHandlers.count > 0 else {
-            return
-        }
+        while locationCompletionHandlers.count > 0 {
+            
+            guard let completionHandler = locationCompletionHandlers.removeFirst() else {
+                return
+            }
         
-        while let completionHandler = locationCompletionHandlers.removeFirst() {
             completionHandler(latitude: latitude, longitude: longitude, status: .ERROR, error: error)
         }
     }
@@ -397,11 +403,21 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
     public func locationManager(manager: CLLocationManager, didChangeAuthorizationStatus status: CLAuthorizationStatus) {
         
         self.handleLocationStatus(status)
+        
+        guard let authorizationChangedCompletionHandler = self.authorizationChangedCompletionHandler else {
+            return
+        }
+        
+        authorizationChangedCompletionHandler(manager: manager, status: status)
     }
     
     // MARK: - Utils
     
     private func handleLocationStatus(status :CLAuthorizationStatus) {
+        
+        guard CLLocationManager.locationServicesEnabled() else {
+            return // TOOD: Error message
+        }
         
         switch status {
         case .AuthorizedWhenInUse, .AuthorizedAlways:
@@ -410,6 +426,18 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
             // TODO: Handle denied
             break;
         case .NotDetermined, .Restricted:
+            self.locationManager.requestWhenInUseAuthorization()
+        }
+    }
+    
+    public func requestAuthorization(status :CLAuthorizationStatus, callback: LocationAuthorizationChanged? = nil) {
+        
+        self.authorizationChangedCompletionHandler = callback
+        
+        switch status {
+        case .AuthorizedAlways:
+            self.locationManager.requestAlwaysAuthorization()
+        default:
             self.locationManager.requestWhenInUseAuthorization()
         }
     }
