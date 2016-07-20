@@ -413,6 +413,15 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
     
     // MARK: - Utils
     
+    public func getLocation() -> CLLocation? {
+        
+        guard let longitude = self.longitude as? Double, latitude = self.latitude as? Double else {
+            return nil
+        }
+        
+        return CLLocation(latitude: latitude, longitude: longitude)
+    }
+    
     private func handleLocationStatus(status :CLAuthorizationStatus) {
         
         guard CLLocationManager.locationServicesEnabled() else {
