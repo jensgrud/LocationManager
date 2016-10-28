@@ -26,7 +26,7 @@ public typealias ReverseGeocodeCompletionHandler = (country :String?, state :Str
 
 public typealias LocationAuthorizationChanged = (manager :CLLocationManager, status :CLAuthorizationStatus) -> Void
 
-public class LocationManager: NSObject, CLLocationManagerDelegate {
+public class LocationManagerSwift: NSObject, CLLocationManagerDelegate {
     
     enum GoogleAPIStatus :String {
         case OK             = "OK"
@@ -109,9 +109,9 @@ public class LocationManager: NSObject, CLLocationManagerDelegate {
     private let kLastLocationCountry = "com.location-manager.kLastCountry"
     private let kLastLocationState = "com.location-manager.kLastState"
     
-    public static let sharedInstance = LocationManager()
+    public static let sharedInstance = LocationManagerSwift()
     
-    init(locationAccuracy :CLLocationAccuracy = kCLLocationAccuracyBest, updateDistanceThreshold :Double = 0.0, updateTimeintervalThreshold :Double = 0.0, initWithLastKnownLocation :Bool = true, googleAPIKey :String? = nil, googleAPIResultType :String? = nil) {
+    public init(locationAccuracy :CLLocationAccuracy = kCLLocationAccuracyBest, updateDistanceThreshold :Double = 0.0, updateTimeintervalThreshold :Double = 0.0, initWithLastKnownLocation :Bool = true, googleAPIKey :String? = nil, googleAPIResultType :String? = nil) {
         
         super.init()
         
