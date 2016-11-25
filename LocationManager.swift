@@ -8,20 +8,13 @@
 import CoreLocation
 import AddressBook
 
-public enum LocationUpdateStatus :String {
-    case OK         = "OK"
-    case ERROR      = "ERROR"
-    case DISTANCE   = "Change in distance too little"
-    case TIME       = "Time since last too little"
-}
-
 public enum ReverseGeoCodingType {
     case GOOGLE
     case APPLE
 }
 
 public typealias DidEnterRegion = (region :CLRegion?, error :NSError?) -> Void
-public typealias LocationCompletionHandler = (latitude:Double, longitude:Double, status:LocationUpdateStatus, error:NSError?) -> Void
+public typealias LocationCompletionHandler = (latitude:Double, longitude:Double, status:LocationOperationStatus, error:NSError?) -> Void
 public typealias ReverseGeocodeCompletionHandler = (country :String?, state :String?, city :String?, reverseGecodeInfo:AnyObject?, placemark:CLPlacemark?, error:NSError?) -> Void
 
 public typealias LocationAuthorizationChanged = (manager :CLLocationManager, status :CLAuthorizationStatus) -> Void
@@ -37,7 +30,6 @@ public class LocationManagerSwift: NSObject, CLLocationManagerDelegate {
     }
     
     private var didEnterRegionCompletionHandlers :[String:DidEnterRegion] = [:]
-    private var locationCompletionHandlers :[LocationCompletionHandler?] = []
     private var reverseGeocodingCompletionHandler:ReverseGeocodeCompletionHandler?
     private var authorizationChangedCompletionHandler:LocationAuthorizationChanged?
     
@@ -45,10 +37,13 @@ public class LocationManagerSwift: NSObject, CLLocationManagerDelegate {
     
     private var updateDistanceThreshold :Double!
     private var updateTimeintervalThreshold :Double!
+    private var desiredLocationAccuracy :CLLocationAccuracy!
     private var initWithLastKnownLocation = true
     
     private var googleAPIKey :String?
     private var googleAPIResultType :String?
+    
+    private let operations = NSOperationQueue()
 
     // Initialize longitude and latitude with last know location
     public lazy var latitude:Double = {
@@ -123,6 +118,7 @@ public class LocationManagerSwift: NSObject, CLLocationManagerDelegate {
         self.googleAPIResultType = googleAPIResultType
         self.updateDistanceThreshold = updateDistanceThreshold
         self.updateTimeintervalThreshold = updateTimeintervalThreshold
+        self.desiredLocationAccuracy = locationAccuracy
         self.initWithLastKnownLocation = initWithLastKnownLocation
     }
     
@@ -192,15 +188,25 @@ public class LocationManagerSwift: NSObject, CLLocationManagerDelegate {
     
     public func updateLocation(completionHandler :LocationCompletionHandler) {
         
-        self.locationCompletionHandlers.append(completionHandler)
-        self.handleLocationStatus(CLLocationManager.authorizationStatus())
+        let lastUpdate = NSUserDefaults.standardUserDefaults().objectForKey(kLastLocationUpdate) as? NSDate
+        
+        guard lastUpdate == nil || fabs((lastUpdate?.timeIntervalSinceNow)!) > updateTimeintervalThreshold else {
+            return completionHandler(latitude: self.latitude, longitude: self.longitude, status: .TIME, error: nil)
+        }
+        
+        let operation = LocationUpdateOperation()
+        operation.delegate = self
+        operation.locationCompletionHandler = completionHandler
+        operation.requestLocation(accuracy: self.desiredLocationAccuracy)
+        
+        operations.addOperation(operation)
     }
     
     public func reverseGeocodeLocation(type :ReverseGeoCodingType = .APPLE, completionHandler :ReverseGeocodeCompletionHandler) {
         
         self.reverseGeocodingCompletionHandler = completionHandler
             
-        self.updateLocation({ (latitude, longitude, status, error) in
+        self.updateLocation { (latitude, longitude, status, error) in
             
             guard error == nil else {
                 return completionHandler(country: "", state: "", city: "", reverseGecodeInfo:nil, placemark:nil, error:error)
@@ -212,7 +218,7 @@ public class LocationManagerSwift: NSObject, CLLocationManagerDelegate {
             case .GOOGLE:
                 self.reverseGeocodeGoogle()
             }
-        })
+        }
     }
     
     private func reverseGeocodeApple() {
@@ -334,72 +340,6 @@ public class LocationManagerSwift: NSObject, CLLocationManagerDelegate {
         task.resume()
     }
  
-    // MARK: - Location Manager Delegate
- 
-    public func locationManager(manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
- 
-        let location = locations.last
-        let timeSinceLastUpdate = location?.timestamp.timeIntervalSinceNow
- 
-        // Check for cached location and invalid measurement
-        guard fabs(timeSinceLastUpdate!) < 5.0 && location?.horizontalAccuracy > 0.0 else {
-            return
-        }
-        
-        manager.stopUpdatingLocation()
-        
-        let currentLocation = CLLocation(latitude: self.latitude, longitude: self.longitude)
-        let lastUpdate = NSUserDefaults.standardUserDefaults().objectForKey(kLastLocationUpdate) as? NSDate
-        
-        guard locationCompletionHandlers.count > 0 else {
-            return
-        }
-        
-        while locationCompletionHandlers.count > 0 {
-            
-            guard let completionHandler = locationCompletionHandlers.removeFirst() else {
-                return
-            }
-            
-            let longitude = location?.coordinate.longitude, latitude = location?.coordinate.latitude
-            
-            self.longitude = longitude!
-            self.latitude = latitude!
-            
-            // Check for distance since last measurement
-            guard currentLocation.distanceFromLocation(location!) > updateDistanceThreshold else {
-                return completionHandler(latitude: latitude!, longitude: longitude!, status: .DISTANCE, error: nil)
-            }
-            
-            // Check for time since last measurement
-            guard lastUpdate == nil || fabs((lastUpdate?.timeIntervalSinceNow)!) > updateTimeintervalThreshold else {
-                return completionHandler(latitude: latitude!, longitude: longitude!, status: .TIME, error: nil)
-            }
-            
-            NSNotificationCenter.defaultCenter().postNotificationName(kLocationUpdated, object: nil)
-            
-            NSUserDefaults.standardUserDefaults().setObject(NSDate(), forKey: kLastLocationUpdate)
-            NSUserDefaults.standardUserDefaults().setDouble(self.latitude, forKey: kLastLocationLatitude)
-            NSUserDefaults.standardUserDefaults().setDouble(self.longitude, forKey: kLastLocationLongitude)
-            
-            completionHandler(latitude: self.latitude, longitude: self.longitude, status: .OK, error: nil)
-        }
-    }
- 
-    public func locationManager(manager: CLLocationManager, didFailWithError error: NSError) {
-        
-        manager.stopUpdatingLocation()
-        
-        while locationCompletionHandlers.count > 0 {
-            
-            guard let completionHandler = locationCompletionHandlers.removeFirst() else {
-                return
-            }
-        
-            completionHandler(latitude: latitude, longitude: longitude, status: .ERROR, error: error)
-        }
-    }
-    
     public func locationManager(manager: CLLocationManager, didChangeAuthorizationStatus status: CLAuthorizationStatus) {
         
         self.handleLocationStatus(status)
@@ -450,5 +390,162 @@ public class LocationManagerSwift: NSObject, CLLocationManagerDelegate {
             self.locationManager.requestWhenInUseAuthorization()
         }
     }
+}
 
+extension LocationManagerSwift : LocationOperationDelegate {
+    
+    func operationDidStart(operation :LocationOperation) {
+        print("Location update started")
+    }
+    
+    func operationDidFinish(operation: LocationOperation, status: LocationOperationStatus, error: NSError?) {
+        print("Location update finished \(status) \(error)")
+    }
+    
+    func operationDidUpdateLocation(operation :LocationOperation, location: CLLocation) {
+        
+        self.longitude = location.coordinate.longitude
+        self.latitude = location.coordinate.latitude
+        
+        NSUserDefaults.standardUserDefaults().setObject(NSDate(), forKey: kLastLocationUpdate)
+        NSUserDefaults.standardUserDefaults().setDouble(self.latitude, forKey: kLastLocationLatitude)
+        NSUserDefaults.standardUserDefaults().setDouble(self.longitude, forKey: kLastLocationLongitude)
+        
+        NSNotificationCenter.defaultCenter().postNotificationName(kLocationUpdated, object: nil)
+    }
+}
+
+// MARK: Location operation
+
+public enum LocationOperationStatus :String {
+    case OK                         = "OK"
+    case TIME                       = "TIME"
+    case ERROR                      = "ERROR"
+    case MISSING_AUTHORIZATION      = "MISSING AUTHORIZATION"
+    case LOCATION_SERVICE_DISABLED  = "LOCATION SERVICE DISABLED"
+}
+
+class LocationOperation: NSOperation, CLLocationManagerDelegate
+{
+    lazy var locationManager = CLLocationManager()
+    
+    private var _executing : Bool = false
+    private var _finished: Bool = false
+    
+    override var executing : Bool {
+        get { return _executing }
+        set {
+            guard _executing != newValue else { return }
+            willChangeValueForKey("isExecuting")
+            _executing = newValue
+            didChangeValueForKey("isExecuting")
+        }
+    }
+    
+    override var finished: Bool {
+        get { return _finished }
+        set {
+            guard _finished != newValue else { return }
+            willChangeValueForKey("isFinished")
+            _finished = newValue
+            didChangeValueForKey("isFinished")
+        }
+    }
+}
+
+protocol LocationOperationDelegate
+{
+    func operationDidStart(operation :LocationOperation)
+    
+    func operationDidFinish(operation :LocationOperation, status :LocationOperationStatus, error :NSError?)
+ 
+    func operationDidUpdateLocation(operation :LocationOperation, location: CLLocation)
+}
+
+final class LocationUpdateOperation: LocationOperation
+{
+    var delegate: LocationOperationDelegate?
+    var locationCompletionHandler :LocationCompletionHandler?
+    
+    func requestLocation(status :CLAuthorizationStatus = .AuthorizedWhenInUse, accuracy :CLLocationAccuracy = kCLLocationAccuracyBest) {
+        
+        guard CLLocationManager.locationServicesEnabled() else {
+            stopUpdatingLocation(status: .LOCATION_SERVICE_DISABLED)
+            return
+        }
+        
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = accuracy
+        
+        switch CLLocationManager.authorizationStatus() {
+        case .AuthorizedAlways, .AuthorizedWhenInUse:
+            startUpdatingLocation()
+        case .Denied, .Restricted:
+            stopUpdatingLocation(status: .MISSING_AUTHORIZATION)
+        case .NotDetermined:
+            if status == .AuthorizedAlways {
+                locationManager.requestAlwaysAuthorization()
+            }
+            else {
+                locationManager.requestWhenInUseAuthorization()
+            }
+        }
+    }
+    
+    func startUpdatingLocation() {
+        
+        locationManager.startUpdatingLocation()
+        delegate?.operationDidStart(self)
+    }
+    
+    func stopUpdatingLocation(latitude: Double = 0.0, longitude: Double = 0.0, status :LocationOperationStatus, error :NSError? = nil) {
+        
+        locationManager.stopUpdatingLocation()
+        
+        if let locationCompletionHandler = locationCompletionHandler {
+            locationCompletionHandler(latitude: latitude, longitude: longitude, status: status, error: error)
+        }
+        
+        delegate?.operationDidFinish(self, status: status, error: error)
+        
+        self._executing = false
+        self._finished = true
+    }
+}
+
+extension LocationUpdateOperation
+{
+    func locationManager(manager: CLLocationManager!, didChangeAuthorizationStatus status: CLAuthorizationStatus) {
+        
+        switch status {
+        case .AuthorizedAlways, .AuthorizedWhenInUse:
+            startUpdatingLocation()
+        case .Denied, .Restricted:
+            stopUpdatingLocation(status: .MISSING_AUTHORIZATION)
+        case .NotDetermined:
+            break
+        }
+    }
+    
+    func locationManager(manager: CLLocationManager, didFailWithError error: NSError) {
+        stopUpdatingLocation(status: .ERROR, error: error)
+    }
+    
+    func locationManager(manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        
+        guard let location = locations.last else {
+            return
+        }
+        
+        let timeSinceLastUpdate = location.timestamp.timeIntervalSinceNow
+        
+        // Check for cached location and invalid measurement
+        guard fabs(timeSinceLastUpdate) < 5.0 && location.horizontalAccuracy > 0.0 else {
+            return
+        }
+        
+        delegate?.operationDidUpdateLocation(self, location: location)
+        
+        stopUpdatingLocation(location.coordinate.latitude, longitude: location.coordinate.longitude, status: .OK, error: nil)
+    }
 }
