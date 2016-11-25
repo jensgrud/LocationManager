@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'LocationManager'
-  s.version = '0.1'
+  s.version = '0.2'
   s.license = 'Unlicensed'
   s.summary = 'Location updating and reverse geo coding made easy'
   s.homepage = 'https://github.com/jensgrud/LocationManager'
