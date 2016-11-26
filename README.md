@@ -1,30 +1,26 @@
-> Location updating and reverse geo coding with completion handlers made easy
+> CLLocationManager wrapper in Swift for easy location update, reverse geocoding and region monitoring with closure and delegate support
 
 ## Install
 Download manually or install via CocoaPods:
 ```bash
-pod 'LocationManager', :git => 'https://github.com/jensgrud/LocationManager.git'
+pod 'LocationManagerSwift', '~> 1.0.1'
 ```
 
 ### Setup and usage
-Create instance with custom parameters or use the shared
-- Google API key
-- Update distance threshold
-- Update time threshold
 
 ```swift
 // updation location
-locationManager.updateLocation { (latitude, longitude, status, error) in
-
+LocationManagerSwift.sharedInstance.updateLocation { (latitude, longitude, status, error) in
+                
 }
 
-// reverse geo coding using Apple API's
-locationManager.reverseGeocodeLocation(completionHandler: { (country, state, city, reverseGecodeInfo, placemark, error) in
-
+// reverse geo coding using Apple or Google API's
+LocationManagerSwift.sharedInstance.reverseGeocodeLocation(.APPLE) { (country, state, city, reverseGecodeInfo, placemark, error) in
+                
 }
 
-// reverse geo coding using Google API's
-locationManager.reverseGeocodeLocation(.GOOGLE, completionHandler: { (country, state, city, reverseGecodeInfo, placemark, error) in
+// region monitoring
+LocationManagerSwift.sharedInstance.monitorRegion(lat, longitude: lon, radius: radius, notifyOnExit: true, notifyOnEntry: false) { (region, status, error) in
 
 }
 ```
