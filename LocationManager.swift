@@ -287,13 +287,8 @@ public class LocationManagerSwift: NSObject {
     
     // MARK: - Utils
     
-    public func getLocation() -> CLLocation? {
-        
-        guard let longitude = self.longitude as? Double, latitude = self.latitude as? Double else {
-            return nil
-        }
-        
-        return CLLocation(latitude: latitude, longitude: longitude)
+    public func getLocation() -> CLLocation {
+        return CLLocation(latitude: self.latitude, longitude: self.longitude)
     }
     
     public func requestAuthorization(status :CLAuthorizationStatus, callback: LocationAuthorizationChanged? = nil) {
@@ -552,21 +547,21 @@ final class RegionMonitoringOperation: LocationOperation
 
 extension RegionMonitoringOperation
 {
-    public func locationManager(manager: CLLocationManager, didEnterRegion region: CLRegion) {
+    func locationManager(manager: CLLocationManager, didEnterRegion region: CLRegion) {
         stopRegionMonitoring(region, status: .OK)
         delegate?.operationDidEnterRegion(self, region: region)
     }
     
-    public func locationManager(manager: CLLocationManager, didExitRegion region: CLRegion) {
+    func locationManager(manager: CLLocationManager, didExitRegion region: CLRegion) {
         stopRegionMonitoring(region, status: .OK)
         delegate?.operationDidExitRegion(self, region: region)
     }
     
-    public func locationManager(manager: CLLocationManager, didStartMonitoringForRegion region: CLRegion) {
+    func locationManager(manager: CLLocationManager, didStartMonitoringForRegion region: CLRegion) {
         delegate?.operationDidStart(self)
     }
     
-    public func locationManager(manager: CLLocationManager, monitoringDidFailForRegion region: CLRegion?, withError error: NSError) {
+    func locationManager(manager: CLLocationManager, monitoringDidFailForRegion region: CLRegion?, withError error: NSError) {
         stopRegionMonitoring(region, status: .ERROR, error: error)
     }
 }
