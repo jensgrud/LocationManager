@@ -32,7 +32,6 @@ public class LocationManagerSwift: NSObject {
     
     private lazy var locationManager = CLLocationManager()
     
-    private var updateDistanceThreshold :Double!
     private var updateTimeintervalThreshold :Double!
     private var desiredLocationAccuracy :CLLocationAccuracy!
     private var initWithLastKnownLocation = true
@@ -103,13 +102,12 @@ public class LocationManagerSwift: NSObject {
     
     public static let sharedInstance = LocationManagerSwift()
     
-    public init(locationAccuracy :CLLocationAccuracy = kCLLocationAccuracyBest, updateDistanceThreshold :Double = 0.0, updateTimeintervalThreshold :Double = 0.0, initWithLastKnownLocation :Bool = true, googleAPIKey :String? = nil, googleAPIResultType :String? = nil) {
+    public init(locationAccuracy :CLLocationAccuracy = kCLLocationAccuracyBest, updateTimeintervalThreshold :Double = 0.0, initWithLastKnownLocation :Bool = true, googleAPIKey :String? = nil, googleAPIResultType :String? = nil) {
         
         super.init()
         
         self.googleAPIKey = googleAPIKey
         self.googleAPIResultType = googleAPIResultType
-        self.updateDistanceThreshold = updateDistanceThreshold
         self.updateTimeintervalThreshold = updateTimeintervalThreshold
         self.desiredLocationAccuracy = locationAccuracy
         self.initWithLastKnownLocation = initWithLastKnownLocation
@@ -406,8 +404,13 @@ final class LocationUpdateOperation: LocationOperation
 {
     var delegate: LocationUpdateDelegate?
     var locationCompletionHandler :LocationUpdateCompletionHandler?
+    var currentLocation :CLLocation?
     
-    func requestLocation(status :CLAuthorizationStatus = .AuthorizedWhenInUse, accuracy :CLLocationAccuracy = kCLLocationAccuracyBest) {
+    private var updateDistanceThreshold :Double!
+    
+    func requestLocation(status :CLAuthorizationStatus = .AuthorizedWhenInUse, accuracy :CLLocationAccuracy = kCLLocationAccuracyBest, updateDistanceThreshold :Double = 10.0) {
+        
+        self.updateDistanceThreshold = updateDistanceThreshold
         
         guard CLLocationManager.locationServicesEnabled() else {
             stopUpdatingLocation(status: .LOCATION_SERVICE_DISABLED)
@@ -446,6 +449,8 @@ final class LocationUpdateOperation: LocationOperation
             locationCompletionHandler(latitude: latitude, longitude: longitude, status: status, error: error)
         }
         
+        currentLocation = CLLocation(latitude: latitude, longitude: longitude)
+        
         delegate?.operationDidFinish(self, status: status, error: error)
         
         self._executing = false
@@ -481,6 +486,11 @@ extension LocationUpdateOperation
         
         // Check for cached location and invalid measurement
         guard fabs(timeSinceLastUpdate) < 5.0 && location.horizontalAccuracy > 0.0 else {
+            return
+        }
+
+        // Check for significant location change
+        if let currentLocation = currentLocation where location.distanceFromLocation(currentLocation) < updateDistanceThreshold {
             return
         }
         
