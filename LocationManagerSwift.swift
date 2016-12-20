@@ -453,8 +453,8 @@ final class LocationUpdateOperation: LocationOperation
         
         delegate?.operationDidFinish(self, status: status, error: error)
         
-        self._executing = false
-        self._finished = true
+        self.executing = false
+        self.finished = true
     }
 }
 
@@ -544,8 +544,8 @@ final class RegionMonitoringOperation: LocationOperation
         
         delegate?.operationDidFinish(self, status: status, error: error)
         
-        self._executing = false
-        self._finished = true
+        self.executing = false
+        self.finished = true
         
         guard let region = region else {
             return
