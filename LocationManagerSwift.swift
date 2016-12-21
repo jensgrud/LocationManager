@@ -126,9 +126,9 @@ public class LocationManagerSwift: NSObject {
         let operation = LocationUpdateOperation()
         operation.delegate = self
         operation.locationCompletionHandler = completionHandler
-        operation.requestLocation(accuracy: self.desiredLocationAccuracy)
         
         operations.addOperation(operation)
+        operation.requestLocation(accuracy: self.desiredLocationAccuracy)
     }
     
     // MARK: - Region monitoring
@@ -138,9 +138,9 @@ public class LocationManagerSwift: NSObject {
         let operation = RegionMonitoringOperation()
         operation.delegate = self
         operation.regionCompletionHandler = completion
-        operation.startRegionMonitoring(latitude, longitude: longitude, radius: radius, notifyOnExit: notifyOnExit, notifyOnEntry: notifyOnEntry)
         
         operations.addOperation(operation)
+        operation.startRegionMonitoring(latitude, longitude: longitude, radius: radius, notifyOnExit: notifyOnExit, notifyOnEntry: notifyOnEntry)
     }
     
     // MARK: - Reverse geocoding
