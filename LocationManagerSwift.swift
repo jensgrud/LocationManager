@@ -185,8 +185,6 @@ public class LocationManagerSwift: NSObject {
                 return completionHandler("", "", "", nil, nil, error)
             }
             
-            print(placemark.addressDictionary!)
-            
             self.country = addressDictionary["CountryCode"] as? String
             self.state = addressDictionary["State"] as? String
             self.city = addressDictionary["City"] as? String
@@ -464,7 +462,7 @@ final class LocationUpdateOperation: LocationOperation
 
 extension LocationUpdateOperation
 {
-    func locationManager(manager: CLLocationManager!, didChangeAuthorizationStatus status: CLAuthorizationStatus) {
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         
         switch status {
         case .authorizedAlways, .authorizedWhenInUse:
@@ -476,11 +474,11 @@ extension LocationUpdateOperation
         }
     }
     
-    func locationManager(manager: CLLocationManager, didFailWithError error: NSError) {
-        stopUpdatingLocation(status: .ERROR, error: error)
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        stopUpdatingLocation(status: .ERROR, error: error as NSError?)
     }
     
-    func locationManager(manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         
         guard let location = locations.last else {
             return
@@ -561,21 +559,21 @@ final class RegionMonitoringOperation: LocationOperation
 
 extension RegionMonitoringOperation
 {
-    func locationManager(manager: CLLocationManager, didEnterRegion region: CLRegion) {
+    func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         stopRegionMonitoring(region: region, status: .OK)
         delegate?.operationDidEnterRegion(operation: self, region: region)
     }
     
-    func locationManager(manager: CLLocationManager, didExitRegion region: CLRegion) {
+    func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         stopRegionMonitoring(region: region, status: .OK)
         delegate?.operationDidExitRegion(operation: self, region: region)
     }
     
-    func locationManager(manager: CLLocationManager, didStartMonitoringForRegion region: CLRegion) {
+    func locationManager(_ manager: CLLocationManager, didStartMonitoringFor region: CLRegion) {
         delegate?.operationDidStart(operation: self)
     }
     
-    func locationManager(manager: CLLocationManager, monitoringDidFailForRegion region: CLRegion?, withError error: NSError) {
-        stopRegionMonitoring(region: region, status: .ERROR, error: error)
+    func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
+        stopRegionMonitoring(region: region, status: .ERROR, error: error as NSError?)
     }
 }
