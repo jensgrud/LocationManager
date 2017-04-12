@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'LocationManagerSwift'
-  s.version = '1.1.2'
+  s.version = '1.1.3'
   s.license = 'MIT'
   s.summary = 'CLLocationManager wrapper in Swift - location updating and reverse geo coding made easy'
   s.homepage = 'https://github.com/jensgrud/LocationManager'

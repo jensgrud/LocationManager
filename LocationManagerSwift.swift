@@ -80,10 +80,10 @@ public class LocationManagerSwift: NSObject {
         var url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=%f,%f&sensor=true"
         
         if let resultType = self.googleAPIResultType {
-            url = url + "&result_type=\(self.googleAPIResultType)"
+            url = url + "&result_type=\(String(describing: self.googleAPIResultType))"
         }
         if let apiKey = self.googleAPIKey {
-            url = url + "&key=\(self.googleAPIKey)"
+            url = url + "&key=\(String(describing: self.googleAPIKey))"
         }
         
         return url
