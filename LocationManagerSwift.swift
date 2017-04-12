@@ -415,7 +415,7 @@ final class LocationUpdateOperation: LocationOperation
         self.updateDistanceThreshold = updateDistanceThreshold
         
         guard CLLocationManager.locationServicesEnabled() else {
-            stopUpdatingLocation(status: .LOCATION_SERVICE_DISABLED)
+            stopUpdatingLocation(status: .LOCATION_SERVICE_DISABLED, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.LOCATION_SERVICE_DISABLED.rawValue]))
             return
         }
         
@@ -426,7 +426,7 @@ final class LocationUpdateOperation: LocationOperation
         case .authorizedAlways, .authorizedWhenInUse:
             startUpdatingLocation()
         case .denied, .restricted:
-            stopUpdatingLocation(status: .MISSING_AUTHORIZATION)
+            stopUpdatingLocation(status: .MISSING_AUTHORIZATION, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.MISSING_AUTHORIZATION.rawValue]))
         case .notDetermined:
             if status == .authorizedAlways {
                 locationManager.requestAlwaysAuthorization()
@@ -468,7 +468,7 @@ extension LocationUpdateOperation
         case .authorizedAlways, .authorizedWhenInUse:
             startUpdatingLocation()
         case .denied, .restricted:
-            stopUpdatingLocation(status: .MISSING_AUTHORIZATION)
+            stopUpdatingLocation(status: .MISSING_AUTHORIZATION, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.MISSING_AUTHORIZATION.rawValue]))
         case .notDetermined:
             break
         }
@@ -512,17 +512,17 @@ final class RegionMonitoringOperation: LocationOperation
     func startRegionMonitoring(latitude :CLLocationDegrees, longitude :CLLocationDegrees, radius :CLLocationDistance = 100.0, notifyOnExit :Bool = true, notifyOnEntry :Bool = false) {
         
         guard CLLocationManager.locationServicesEnabled() else {
-            stopRegionMonitoring(status: .LOCATION_SERVICE_DISABLED)
+            stopRegionMonitoring(status: .LOCATION_SERVICE_DISABLED, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.LOCATION_SERVICE_DISABLED.rawValue]))
             return
         }
         
         guard CLLocationManager.authorizationStatus() == .authorizedAlways else {
-            stopRegionMonitoring(status: .MISSING_AUTHORIZATION)
+            stopRegionMonitoring(status: .MISSING_AUTHORIZATION, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.MISSING_AUTHORIZATION.rawValue]))
             return
         }
         
         guard radius < self.locationManager.maximumRegionMonitoringDistance else {
-            stopRegionMonitoring(status: .DISTANCE)
+            stopRegionMonitoring(status: .DISTANCE, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.DISTANCE.rawValue]))
             return
         }
         
