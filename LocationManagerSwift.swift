@@ -157,7 +157,7 @@ public class LocationManagerSwift: NSObject {
             return
         }
         
-        for operation in rangingOperations
+        for operation in rangingOperations {
             operation.stopRanging(with: .OK, error: nil)
         }
     }
