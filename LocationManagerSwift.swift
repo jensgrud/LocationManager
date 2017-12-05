@@ -131,6 +131,37 @@ public class LocationManagerSwift: NSObject {
         operation.requestLocation(accuracy: self.desiredLocationAccuracy)
     }
     
+    public func startRanging(for region :CLBeaconRegion, onRanging :@escaping RangingUpdateHandler, completion :@escaping RangingCompletionHandler) {
+        
+        let operation = BeaconRangingOperation()
+        operation.delegate = self
+        operation.updateHandler = onRanging
+        operation.completionHandler = completion
+        
+        operations.addOperation(operation)
+        operation.startRanging(for: region)
+    }
+    
+    public func stopRanging(for region :CLBeaconRegion) {
+        
+        let filtered = operations.operations.filter { operation -> Bool in
+            
+            if let operation = operation as? BeaconRangingOperation, operation.region == region {
+                return true
+            }
+            
+            return false
+        }
+        
+        guard let rangingOperations = filtered as? [BeaconRangingOperation] else {
+            return
+        }
+        
+        for operation in rangingOperations
+            operation.stopRanging(with: .OK, error: nil)
+        }
+    }
+    
     // MARK: - Region monitoring
     
     public func monitorRegion(latitude :CLLocationDegrees, longitude :CLLocationDegrees, radius :CLLocationDistance = 100.0, notifyOnExit :Bool = true, notifyOnEntry :Bool = false, completion :@escaping RegionMonitoringCompletionHandler) {
@@ -341,6 +372,17 @@ extension LocationManagerSwift : RegionMonitoringDelegate {
     }
 }
 
+extension LocationManagerSwift : BeaconRangingDelegate {
+    
+    func operationDidRangeBeacons(operation :LocationOperation, beacons: [CLBeacon], in region: CLBeaconRegion) {
+        
+    }
+    
+    func operationDidFailRangingFor(operation :LocationOperation, region: CLBeaconRegion, withError error: Error) {
+        
+    }
+}
+
 // MARK: Location operation
 
 public enum LocationOperationStatus :String {
@@ -349,11 +391,14 @@ public enum LocationOperationStatus :String {
     case DISTANCE                   = "DISTANCE"
     case ERROR                      = "ERROR"
     case MISSING_AUTHORIZATION      = "MISSING AUTHORIZATION"
+    case RANGING_DISABLED           = "RANGING DISABLED"
     case LOCATION_SERVICE_DISABLED  = "LOCATION SERVICE DISABLED"
 }
 
 public typealias LocationUpdateCompletionHandler = (_ latitude :Double, _ longitude :Double, _ status :LocationOperationStatus, _ error :NSError?) -> Void
 public typealias RegionMonitoringCompletionHandler = (_ region :CLRegion?, _ status :LocationOperationStatus, _ error :NSError?) -> Void
+public typealias RangingUpdateHandler = (_ region :CLBeaconRegion?, _ beacons: [CLBeacon], _ status :LocationOperationStatus, _ error :NSError?) -> Void
+public typealias RangingCompletionHandler = (_ region :CLBeaconRegion?, _ status :LocationOperationStatus, _ error :NSError?) -> Void
 
 class LocationOperation: Operation, CLLocationManagerDelegate
 {
@@ -400,6 +445,13 @@ protocol RegionMonitoringDelegate : LocationOperationDelegate
     func operationDidEnterRegion(operation :LocationOperation, region: CLRegion)
     
     func operationDidExitRegion(operation :LocationOperation, region: CLRegion)
+}
+
+protocol BeaconRangingDelegate : LocationOperationDelegate
+{
+    func operationDidRangeBeacons(operation :LocationOperation, beacons: [CLBeacon], in region: CLBeaconRegion)
+    
+    func operationDidFailRangingFor(operation :LocationOperation, region: CLBeaconRegion, withError error: Error)
 }
 
 final class LocationUpdateOperation: LocationOperation
@@ -557,6 +609,53 @@ final class RegionMonitoringOperation: LocationOperation
     }
 }
 
+final class BeaconRangingOperation: LocationOperation {
+    
+    var region :CLBeaconRegion?
+    var delegate :BeaconRangingDelegate?
+    var updateHandler :RangingUpdateHandler?
+    var completionHandler :RangingCompletionHandler?
+    
+    func startRanging(for region :CLBeaconRegion) {
+        
+        self.region = region
+        
+        guard CLLocationManager.locationServicesEnabled() else {
+            stopRanging(with: .LOCATION_SERVICE_DISABLED, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.LOCATION_SERVICE_DISABLED.rawValue]))
+            return
+        }
+        
+        guard CLLocationManager.isRangingAvailable() else {
+            stopRanging(with: .RANGING_DISABLED, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.RANGING_DISABLED.rawValue]))
+            return
+        }
+        
+        guard self.locationManager.rangedRegions.isEmpty else {
+            stopRanging(with: .RANGING_DISABLED, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.RANGING_DISABLED.rawValue]))
+            return
+        }
+        
+        self.locationManager.delegate = self
+        self.locationManager.startRangingBeacons(in: region)
+    }
+    
+    func stopRanging(with status :LocationOperationStatus, error :NSError? = nil) {
+        
+        if let completionHandler = completionHandler {
+            completionHandler(region, status, error)
+        }
+        
+        delegate?.operationDidFinish(operation: self, status: status, error: error)
+        
+        self.isExecuting = false
+        self.isFinished = true
+        
+        if let region = region {
+            locationManager.stopRangingBeacons(in: region)
+        }
+    }
+}
+
 extension RegionMonitoringOperation
 {
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
@@ -575,5 +674,24 @@ extension RegionMonitoringOperation
     
     func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
         stopRegionMonitoring(region: region, status: .ERROR, error: error as NSError?)
+    }
+}
+
+extension BeaconRangingOperation {
+    
+    func locationManager(_ manager: CLLocationManager, didRangeBeacons beacons: [CLBeacon], in region: CLBeaconRegion) {
+        
+        if let updateHandler = updateHandler {
+            updateHandler(region, beacons, .OK, nil)
+        }
+        
+        delegate?.operationDidRangeBeacons(operation: self, beacons: beacons, in: region)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, rangingBeaconsDidFailFor region: CLBeaconRegion, withError error: Error) {
+        
+        stopRanging(with: .ERROR, error: error as NSError?)
+        
+        delegate?.operationDidFailRangingFor(operation: self, region: region, withError: error)
     }
 }
