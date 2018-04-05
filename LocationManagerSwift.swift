@@ -616,7 +616,12 @@ final class BeaconRangingOperation: LocationOperation {
     var updateHandler :RangingUpdateHandler?
     var completionHandler :RangingCompletionHandler?
     
-    func startRanging(for region :CLBeaconRegion) {
+    func startRanging(for region :CLBeaconRegion?) {
+        
+        guard let region = region else {
+            stopRanging(with: .ERROR, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:"Missing region"]))
+            return
+        }
         
         self.region = region
         
@@ -630,13 +635,16 @@ final class BeaconRangingOperation: LocationOperation {
             return
         }
         
-        guard self.locationManager.rangedRegions.isEmpty else {
-            stopRanging(with: .RANGING_DISABLED, error: NSError(domain: "", code: 501, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.RANGING_DISABLED.rawValue]))
-            return
-        }
+        locationManager.delegate = self
         
-        self.locationManager.delegate = self
-        self.locationManager.startRangingBeacons(in: region)
+        switch CLLocationManager.authorizationStatus() {
+        case .authorizedAlways, .authorizedWhenInUse:
+            locationManager.startRangingBeacons(in: region)
+        case .denied, .restricted:
+            stopRanging(with: .MISSING_AUTHORIZATION, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.MISSING_AUTHORIZATION.rawValue]))
+        case .notDetermined:
+            locationManager.requestWhenInUseAuthorization()
+        }
     }
     
     func stopRanging(with status :LocationOperationStatus, error :NSError? = nil) {
@@ -693,5 +701,17 @@ extension BeaconRangingOperation {
         stopRanging(with: .ERROR, error: error as NSError?)
         
         delegate?.operationDidFailRangingFor(operation: self, region: region, withError: error)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            startRanging(for: region)
+        case .denied, .restricted:
+            stopRanging(with: .MISSING_AUTHORIZATION, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.MISSING_AUTHORIZATION.rawValue]))
+        case .notDetermined:
+            break
+        }
     }
 }
