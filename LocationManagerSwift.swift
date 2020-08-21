@@ -393,6 +393,7 @@ public enum LocationOperationStatus :String {
     case MISSING_AUTHORIZATION      = "MISSING AUTHORIZATION"
     case RANGING_DISABLED           = "RANGING DISABLED"
     case LOCATION_SERVICE_DISABLED  = "LOCATION SERVICE DISABLED"
+    case UNEXPECTED_STATUS          = "LOCATION SERVICE STATUS UNEXPECTED"
 }
 
 public typealias LocationUpdateCompletionHandler = (_ latitude :Double, _ longitude :Double, _ status :LocationOperationStatus, _ error :NSError?) -> Void
@@ -482,10 +483,11 @@ final class LocationUpdateOperation: LocationOperation
         case .notDetermined:
             if status == .authorizedAlways {
                 locationManager.requestAlwaysAuthorization()
-            }
-            else {
+            } else {
                 locationManager.requestWhenInUseAuthorization()
             }
+        @unknown default:
+            stopUpdatingLocation(status: .UNEXPECTED_STATUS, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.UNEXPECTED_STATUS.rawValue]))
         }
     }
     
@@ -523,6 +525,8 @@ extension LocationUpdateOperation
             stopUpdatingLocation(status: .MISSING_AUTHORIZATION, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.MISSING_AUTHORIZATION.rawValue]))
         case .notDetermined:
             break
+        @unknown default:
+            stopUpdatingLocation(status: .UNEXPECTED_STATUS, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.UNEXPECTED_STATUS.rawValue]))
         }
     }
     
@@ -644,6 +648,8 @@ final class BeaconRangingOperation: LocationOperation {
             stopRanging(with: .MISSING_AUTHORIZATION, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.MISSING_AUTHORIZATION.rawValue]))
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
+        @unknown default:
+            stopRanging(with: .UNEXPECTED_STATUS, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.UNEXPECTED_STATUS.rawValue]))
         }
     }
     
@@ -712,6 +718,8 @@ extension BeaconRangingOperation {
             stopRanging(with: .MISSING_AUTHORIZATION, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.MISSING_AUTHORIZATION.rawValue]))
         case .notDetermined:
             break
+        @unknown default:
+            stopRanging(with: .UNEXPECTED_STATUS, error: NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey:LocationOperationStatus.UNEXPECTED_STATUS.rawValue]))
         }
     }
 }
